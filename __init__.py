@@ -40,6 +40,15 @@ except ImportError as e:
     IMAGE_EDIT_DISPLAY_MAPPINGS = {}
     IMAGE_EDIT_AVAILABLE = False
 
+try:
+    from .gemini_mirror_nodes import NODE_CLASS_MAPPINGS as MIRROR_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as MIRROR_DISPLAY_MAPPINGS
+    MIRROR_AVAILABLE = True
+except ImportError as e:
+    print(f"Mirror nodes not available: {e}")
+    MIRROR_MAPPINGS = {}
+    MIRROR_DISPLAY_MAPPINGS = {}
+    MIRROR_AVAILABLE = False
+
 # 合并所有节点映射
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
@@ -60,6 +69,10 @@ if IMAGE_EDIT_AVAILABLE:
     NODE_CLASS_MAPPINGS.update(IMAGE_EDIT_MAPPINGS)
     NODE_DISPLAY_NAME_MAPPINGS.update(IMAGE_EDIT_DISPLAY_MAPPINGS)
 
+if MIRROR_AVAILABLE:
+    NODE_CLASS_MAPPINGS.update(MIRROR_MAPPINGS)
+    NODE_DISPLAY_NAME_MAPPINGS.update(MIRROR_DISPLAY_MAPPINGS)
+
 # 导出给 ComfyUI
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
@@ -73,5 +86,7 @@ if REST_AVAILABLE:
     print("✅ REST API nodes available")
 if IMAGE_EDIT_AVAILABLE:
     print("✅ Image edit nodes available")
-if not ORIGINAL_AVAILABLE and not VERTEX_AVAILABLE and not REST_AVAILABLE and not IMAGE_EDIT_AVAILABLE:
+if MIRROR_AVAILABLE:
+    print("✅ Mirror nodes available")
+if not ORIGINAL_AVAILABLE and not VERTEX_AVAILABLE and not REST_AVAILABLE and not IMAGE_EDIT_AVAILABLE and not MIRROR_AVAILABLE:
     print("⚠️ No nodes available - check dependencies")
