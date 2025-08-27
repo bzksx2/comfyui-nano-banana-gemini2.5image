@@ -24,12 +24,31 @@ try:
 except ImportError:
     # Fallback utility functions
     def tensor_to_pil(tensor):
+        # 处理批次图像：如果是4维张量，取第一张图像
         if len(tensor.shape) == 4:
-            tensor = tensor.squeeze(0)
-        if tensor.shape[0] == 3:
-            tensor = tensor.permute(1, 2, 0)
-        tensor = (tensor * 255).clamp(0, 255).byte()
-        return Image.fromarray(tensor.cpu().numpy())
+            # 形状: (batch, height, width, channels) 或 (batch, channels, height, width)
+            tensor = tensor[0]  # 取第一张图像
+        
+        # 处理3维张量
+        if len(tensor.shape) == 3:
+            # 如果是 (channels, height, width) 格式，转换为 (height, width, channels)
+            if tensor.shape[0] == 3 or tensor.shape[0] == 1:
+                tensor = tensor.permute(1, 2, 0)
+        
+        # 确保数据类型正确并转换为PIL图像
+        if tensor.dtype != torch.uint8:
+            tensor = (tensor * 255).clamp(0, 255).byte()
+        
+        # 转换为numpy数组
+        numpy_array = tensor.cpu().numpy()
+        
+        # 处理单通道图像
+        if numpy_array.shape[-1] == 1:
+            numpy_array = numpy_array.squeeze(-1)
+            return Image.fromarray(numpy_array, mode='L')
+        
+        # 处理RGB图像
+        return Image.fromarray(numpy_array)
     
     def pil_to_tensor(image):
         if image.mode != 'RGB':

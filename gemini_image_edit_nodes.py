@@ -1,6 +1,6 @@
 """
-Gemini 图片编辑节点
-支持真正的图片生成和编辑，增强限流处理
+Gemini 图像编辑节点
+支持单图和多图输入，自动处理批次数据
 """
 
 import torch
@@ -12,30 +12,19 @@ import requests
 import json
 import time
 import random
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 
 try:
+    from .tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
     from .utils import (
-        tensor_to_pil, pil_to_tensor, image_to_base64, base64_to_image,
+        image_to_base64, base64_to_image,
         validate_api_key, format_error_message, resize_image_for_api
     )
     from .config import DEFAULT_CONFIG
 except ImportError:
-    # Fallback utility functions
-    def tensor_to_pil(tensor):
-        if len(tensor.shape) == 4:
-            tensor = tensor.squeeze(0)
-        if tensor.shape[0] == 3:
-            tensor = tensor.permute(1, 2, 0)
-        tensor = (tensor * 255).clamp(0, 255).byte()
-        return Image.fromarray(tensor.cpu().numpy())
-    
-    def pil_to_tensor(image):
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        image_array = np.array(image).astype(np.float32) / 255.0
-        tensor = torch.from_numpy(image_array).unsqueeze(0)
-        return tensor
+    from .tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
+    # Fallback utility functions - 如果无法导入，使用内置版本
+    pass
     
     def image_to_base64(image, format='JPEG'):
         buffer = io.BytesIO()
@@ -58,197 +47,44 @@ except ImportError:
 
 
 def smart_retry_delay(attempt, error_code=None):
-    """智能重试延迟 - 根据错误类型调整等待时间"""
-    base_delay = 2 ** attempt  # 指数退避
+    """智能重试延迟"""
+    base_delay = 2 ** attempt
     
-    if error_code == 429:  # 限流错误
-        # 对于429错误，使用更长的等待时间
-        rate_limit_delay = 60 + random.uniform(10, 30)  # 60-90秒随机等待
+    if error_code == 429:
+        rate_limit_delay = 60 + random.uniform(10, 30)
         return max(base_delay, rate_limit_delay)
-    elif error_code in [500, 502, 503, 504]:  # 服务器错误
-        return base_delay + random.uniform(1, 5)  # 添加随机抖动
+    elif error_code in [500, 502, 503, 504]:
+        return base_delay + random.uniform(1, 5)
     else:
         return base_delay
 
 
-class GeminiImageGeneration:
-    """Gemini 图片生成节点 - 纯文本生成图片"""
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "api_key": ("STRING", {"default": "", "multiline": False}),
-                "prompt": ("STRING", {"default": "A beautiful mountain landscape at sunset", "multiline": True}),
-                "model": (["gemini-2.5-flash-image-preview", "gemini-2.0-flash-preview-image-generation"], {"default": "gemini-2.5-flash-image-preview"}),
-                "temperature": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),
-                "top_p": ("FLOAT", {"default": 0.95, "min": 0.0, "max": 1.0, "step": 0.05}),
-                "max_output_tokens": ("INT", {"default": 8192, "min": 1, "max": 32768}),
-            }
-        }
-    
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("image", "response_text")
-    FUNCTION = "generate_image"
-    CATEGORY = "Gemini"
-    
-    def generate_image(self, api_key: str, prompt: str, model: str, 
-                      temperature: float, top_p: float, max_output_tokens: int) -> Tuple[torch.Tensor, str]:
-        """使用 Gemini 生成图片"""
-        
-        # 验证API密钥
-        if not validate_api_key(api_key):
-            raise ValueError("API Key格式无效或为空")
-        
-        # 验证提示词
-        if not prompt.strip():
-            raise ValueError("提示词不能为空")
-        
-        # 构建API URL
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        
-        # 构建请求数据
-        request_data = {
-            "contents": [{
-                "parts": [{
-                    "text": prompt.strip()
-                }]
-            }],
-            "generationConfig": {
-                "temperature": temperature,
-                "topP": top_p,
-                "maxOutputTokens": max_output_tokens,
-                "responseModalities": ["TEXT", "IMAGE"]
-            }
-        }
-        
-        # 设置请求头
-        headers = {
-            "Content-Type": "application/json",
-            "x-goog-api-key": api_key.strip()
-        }
-        
-        # 智能重试机制
-        max_retries = 5  # 增加重试次数
-        timeout = DEFAULT_CONFIG.get("timeout", 120)
-        
-        for attempt in range(max_retries):
-            try:
-                print(f"🎨 正在生成图片... (尝试 {attempt + 1}/{max_retries}) 使用模型: {model}")
-                print(f"📝 提示词: {prompt[:100]}...")
-                
-                # 发送请求
-                response = requests.post(url, headers=headers, json=request_data, timeout=timeout)
-                
-                # 成功响应
-                if response.status_code == 200:
-                    # 解析响应
-                    result = response.json()
-                    print(f"📋 API响应结构: {list(result.keys())}")
-                    
-                    # 提取文本响应和图片
-                    response_text = ""
-                    generated_image = None
-                    
-                    if "candidates" in result and result["candidates"]:
-                        candidate = result["candidates"][0]
-                        if "content" in candidate and "parts" in candidate["content"]:
-                            for part in candidate["content"]["parts"]:
-                                # 提取文本
-                                if "text" in part:
-                                    response_text += part["text"]
-                                
-                                # 提取图片
-                                if "inline_data" in part or "inlineData" in part:
-                                    inline_data = part.get("inline_data") or part.get("inlineData")
-                                    if inline_data and "data" in inline_data:
-                                        try:
-                                            # 解码图片数据
-                                            image_data = inline_data["data"]
-                                            image_bytes = base64.b64decode(image_data)
-                                            generated_image = Image.open(io.BytesIO(image_bytes))
-                                            print("✅ 成功提取生成的图片")
-                                        except Exception as e:
-                                            print(f"⚠️ 解码图片失败: {e}")
-                    
-                    # 如果没有生成图片，创建占位符
-                    if generated_image is None:
-                        print("⚠️ 未检测到生成的图片，创建占位符")
-                        generated_image = Image.new('RGB', (512, 512), color='lightgray')
-                        if not response_text:
-                            response_text = "图片生成请求已发送，但未收到图片数据"
-                    
-                    # 转换为tensor
-                    image_tensor = pil_to_tensor(generated_image)
-                    
-                    print("✅ 图片生成完成")
-                    return (image_tensor, response_text)
-                
-                # 处理错误响应
-                else:
-                    print(f"❌ HTTP状态码: {response.status_code}")
-                    try:
-                        error_detail = response.json()
-                        print(f"❌ 错误详情: {json.dumps(error_detail, indent=2, ensure_ascii=False)}")
-                        
-                        # 检查是否是配额错误
-                        if response.status_code == 429:
-                            error_message = error_detail.get("error", {}).get("message", "")
-                            if "quota" in error_message.lower():
-                                print("⚠️ 检测到配额限制错误")
-                    except:
-                        print(f"❌ 错误文本: {response.text}")
-                    
-                    # 如果是最后一次尝试，抛出异常
-                    if attempt == max_retries - 1:
-                        response.raise_for_status()
-                    
-                    # 智能等待
-                    delay = smart_retry_delay(attempt, response.status_code)
-                    print(f"🔄 等待 {delay:.1f} 秒后重试...")
-                    time.sleep(delay)
-                    
-            except requests.exceptions.RequestException as e:
-                error_msg = format_error_message(e)
-                print(f"❌ 请求失败: {error_msg}")
-                if attempt == max_retries - 1:
-                    raise ValueError(f"API请求失败: {error_msg}")
-                else:
-                    delay = smart_retry_delay(attempt)
-                    print(f"🔄 等待 {delay:.1f} 秒后重试...")
-                    time.sleep(delay)
-                    
-            except Exception as e:
-                error_msg = format_error_message(e)
-                print(f"❌ 处理失败: {error_msg}")
-                raise ValueError(f"图片生成失败: {error_msg}")
-
-
 class GeminiImageEdit:
-    """Gemini 图片编辑节点 - 基于输入图片进行编辑"""
+    """Gemini 图像编辑节点 - 支持单图和多图输入"""
     
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "api_key": ("STRING", {"default": "", "multiline": False}),
-                "image": ("IMAGE",),
-                "prompt": ("STRING", {"default": "Can you add a llama next to me?", "multiline": True}),
+                "images": ("IMAGE",),  # 支持批次图像
+                "prompt": ("STRING", {"default": "Describe these images and edit them", "multiline": True}),
                 "model": (["gemini-2.5-flash-image-preview", "gemini-2.0-flash-preview-image-generation"], {"default": "gemini-2.5-flash-image-preview"}),
                 "temperature": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),
                 "top_p": ("FLOAT", {"default": 0.95, "min": 0.0, "max": 1.0, "step": 0.05}),
                 "max_output_tokens": ("INT", {"default": 8192, "min": 1, "max": 32768}),
+                "process_mode": (["first_image_only", "all_images_combined", "each_image_separately"], {"default": "first_image_only"}),
             }
         }
     
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("edited_image", "response_text")
-    FUNCTION = "edit_image"
+    FUNCTION = "edit_images"
     CATEGORY = "Gemini"
     
-    def edit_image(self, api_key: str, image: torch.Tensor, prompt: str, model: str,
-                   temperature: float, top_p: float, max_output_tokens: int) -> Tuple[torch.Tensor, str]:
-        """使用 Gemini 编辑图片"""
+    def edit_images(self, api_key: str, images: torch.Tensor, prompt: str, model: str,
+                   temperature: float, top_p: float, max_output_tokens: int, process_mode: str) -> Tuple[torch.Tensor, str]:
+        """批次处理图像编辑"""
         
         # 验证API密钥
         if not validate_api_key(api_key):
@@ -258,8 +94,28 @@ class GeminiImageEdit:
         if not prompt.strip():
             raise ValueError("提示词不能为空")
         
-        # 转换输入图片
-        pil_image = tensor_to_pil(image)
+        print(f"📊 输入张量信息: {get_tensor_info(images)}")
+        print(f"🔧 处理模式: {process_mode}")
+        
+        # 转换为PIL图像列表
+        pil_images = batch_tensor_to_pil_list(images)
+        print(f"🖼️ 转换得到 {len(pil_images)} 张图像")
+        
+        if process_mode == "first_image_only":
+            # 只处理第一张图像
+            return self._process_single_image(api_key, pil_images[0], prompt, model, temperature, top_p, max_output_tokens)
+        
+        elif process_mode == "all_images_combined":
+            # 将所有图像合并发送
+            return self._process_combined_images(api_key, pil_images, prompt, model, temperature, top_p, max_output_tokens)
+        
+        elif process_mode == "each_image_separately":
+            # 分别处理每张图像（暂时返回第一张的结果）
+            return self._process_single_image(api_key, pil_images[0], prompt, model, temperature, top_p, max_output_tokens)    
+
+    def _process_single_image(self, api_key: str, pil_image: Image.Image, prompt: str, model: str,
+                             temperature: float, top_p: float, max_output_tokens: int) -> Tuple[torch.Tensor, str]:
+        """处理单张图像"""
         
         # 转换为base64
         image_base64 = image_to_base64(pil_image, format='JPEG')
@@ -267,13 +123,11 @@ class GeminiImageEdit:
         # 构建API URL
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         
-        # 构建请求数据 - 包含文本和图片
+        # 构建请求数据
         request_data = {
             "contents": [{
                 "parts": [
-                    {
-                        "text": prompt.strip()
-                    },
+                    {"text": prompt.strip()},
                     {
                         "inline_data": {
                             "mime_type": "image/jpeg",
@@ -296,21 +150,66 @@ class GeminiImageEdit:
             "x-goog-api-key": api_key.strip()
         }
         
-        # 智能重试机制
-        max_retries = 5  # 增加重试次数
+        # 发送请求并处理响应
+        return self._send_request_and_process(url, headers, request_data, pil_image, model)
+    
+    def _process_combined_images(self, api_key: str, pil_images: List[Image.Image], prompt: str, model: str,
+                                temperature: float, top_p: float, max_output_tokens: int) -> Tuple[torch.Tensor, str]:
+        """处理多张图像（合并发送）"""
+        
+        # 构建包含多张图像的请求
+        parts = [{"text": prompt.strip()}]
+        
+        # 添加所有图像
+        for i, pil_image in enumerate(pil_images):
+            image_base64 = image_to_base64(pil_image, format='JPEG')
+            parts.append({
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": image_base64
+                }
+            })
+            print(f"📎 添加第 {i+1} 张图像到请求中")
+        
+        # 构建API URL
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        
+        # 构建请求数据
+        request_data = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "temperature": temperature,
+                "topP": top_p,
+                "maxOutputTokens": max_output_tokens,
+                "responseModalities": ["TEXT", "IMAGE"]
+            }
+        }
+        
+        # 设置请求头
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key.strip()
+        }
+        
+        # 发送请求并处理响应
+        return self._send_request_and_process(url, headers, request_data, pil_images[0], model)
+    
+    def _send_request_and_process(self, url: str, headers: dict, request_data: dict, 
+                                 fallback_image: Image.Image, model: str) -> Tuple[torch.Tensor, str]:
+        """发送请求并处理响应"""
+        
+        max_retries = 5
         timeout = DEFAULT_CONFIG.get("timeout", 120)
         
         for attempt in range(max_retries):
             try:
-                print(f"🖼️ 正在编辑图片... (尝试 {attempt + 1}/{max_retries}) 使用模型: {model}")
-                print(f"📝 编辑指令: {prompt[:100]}...")
+                print(f"🖼️ 正在处理图像... (尝试 {attempt + 1}/{max_retries}) 使用模型: {model}")
                 
                 # 发送请求
                 response = requests.post(url, headers=headers, json=request_data, timeout=timeout)
                 
                 # 成功响应
                 if response.status_code == 200:
-                    # 解析响应
                     result = response.json()
                     print(f"📋 API响应结构: {list(result.keys())}")
                     
@@ -331,7 +230,6 @@ class GeminiImageEdit:
                                     inline_data = part.get("inline_data") or part.get("inlineData")
                                     if inline_data and "data" in inline_data:
                                         try:
-                                            # 解码图片数据
                                             image_data = inline_data["data"]
                                             image_bytes = base64.b64decode(image_data)
                                             edited_image = Image.open(io.BytesIO(image_bytes))
@@ -342,14 +240,14 @@ class GeminiImageEdit:
                     # 如果没有编辑后的图片，返回原图片
                     if edited_image is None:
                         print("⚠️ 未检测到编辑后的图片，返回原图片")
-                        edited_image = pil_image
+                        edited_image = fallback_image
                         if not response_text:
-                            response_text = "图片编辑请求已发送，但未收到编辑后的图片"
+                            response_text = "图片处理请求已发送，但未收到编辑后的图片"
                     
                     # 转换为tensor
                     image_tensor = pil_to_tensor(edited_image)
                     
-                    print("✅ 图片编辑完成")
+                    print("✅ 图片处理完成")
                     return (image_tensor, response_text)
                 
                 # 处理错误响应
@@ -358,23 +256,12 @@ class GeminiImageEdit:
                     try:
                         error_detail = response.json()
                         print(f"❌ 错误详情: {json.dumps(error_detail, indent=2, ensure_ascii=False)}")
-                        
-                        # 检查是否是配额错误
-                        if response.status_code == 429:
-                            error_message = error_detail.get("error", {}).get("message", "")
-                            if "quota" in error_message.lower():
-                                print("⚠️ 检测到配额限制错误，建议:")
-                                print("   1. 等待更长时间再试")
-                                print("   2. 检查API配额设置")
-                                print("   3. 考虑升级API计划")
                     except:
                         print(f"❌ 错误文本: {response.text}")
                     
-                    # 如果是最后一次尝试，抛出异常
                     if attempt == max_retries - 1:
                         response.raise_for_status()
                     
-                    # 智能等待
                     delay = smart_retry_delay(attempt, response.status_code)
                     print(f"🔄 等待 {delay:.1f} 秒后重试...")
                     time.sleep(delay)
@@ -392,16 +279,14 @@ class GeminiImageEdit:
             except Exception as e:
                 error_msg = format_error_message(e)
                 print(f"❌ 处理失败: {error_msg}")
-                raise ValueError(f"图片编辑失败: {error_msg}")
+                raise ValueError(f"图片处理失败: {error_msg}")
 
 
 # 节点映射
 NODE_CLASS_MAPPINGS = {
-    "GeminiImageGeneration": GeminiImageGeneration,
     "GeminiImageEdit": GeminiImageEdit,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "GeminiImageGeneration": "Gemini 图片生成",
-    "GeminiImageEdit": "Gemini 图片编辑",
+    "GeminiImageEdit": "Gemini 图像编辑",
 }
