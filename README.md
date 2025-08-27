@@ -155,13 +155,30 @@ api_key = "your_api_key"
 prompt = "A beautiful sunset over the ocean"
 ```
 
+### 使用 OpenAI 格式镜像站
+
+```python
+# 在 ComfyUI 中添加 "Gemini OpenAI格式镜像站图片生成" 节点
+# 设置 OpenAI 格式API地址:
+api_url = "https://ai.t8star.cn"  # OpenAI 格式镜像站
+api_key = "your_api_key"
+model = "gpt-4o-image"  # 支持图像的模型
+prompt = "生成图片: 一个美丽的山景"
+```
+
 ## 🌐 支持的镜像站
 
-插件支持任何兼容 Gemini API 格式的镜像站，包括但不限于：
+插件支持两种API格式的镜像站：
 
+### Gemini 原生格式镜像站
 - `https://ai.comfly.chat` - ComflyAI 镜像站
 - `https://api.openai-proxy.com` - 代理服务
-- 其他自建或第三方镜像服务
+- 其他兼容 Gemini API 格式的镜像服务
+
+### OpenAI 格式镜像站
+- `https://ai.t8star.cn` - T8Star 镜像站
+- `https://api.chatanywhere.com.cn` - ChatAnywhere
+- 其他兼容 OpenAI Chat Completions API 的镜像服务
 
 ### 镜像站配置说明
 
@@ -176,6 +193,23 @@ prompt = "A beautiful sunset over the ocean"
    ```
 
 3. **URL验证**: 插件会自动验证URL格式的有效性
+
+### OpenAI 格式配置说明
+
+1. **完整URL**: 如果提供完整的API端点，插件会直接使用
+   ```
+   https://ai.t8star.cn/v1/chat/completions
+   ```
+
+2. **基础URL**: 如果只提供基础域名，插件会自动构建完整路径
+   ```
+   https://ai.t8star.cn
+   ```
+
+3. **模型选择**: 使用支持图像功能的模型名称
+   - `gpt-4o-image` - 支持图像生成和编辑
+   - `gpt-4-vision-preview` - 支持图像理解和编辑
+   - 其他镜像站特定的图像模型
 
 ## ⚠️ 注意事项
 

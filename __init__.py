@@ -49,6 +49,15 @@ except ImportError as e:
     MIRROR_DISPLAY_MAPPINGS = {}
     MIRROR_AVAILABLE = False
 
+try:
+    from .gemini_openai_mirror_nodes import NODE_CLASS_MAPPINGS as OPENAI_MIRROR_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as OPENAI_MIRROR_DISPLAY_MAPPINGS
+    OPENAI_MIRROR_AVAILABLE = True
+except ImportError as e:
+    print(f"OpenAI Mirror nodes not available: {e}")
+    OPENAI_MIRROR_MAPPINGS = {}
+    OPENAI_MIRROR_DISPLAY_MAPPINGS = {}
+    OPENAI_MIRROR_AVAILABLE = False
+
 # 合并所有节点映射
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
@@ -73,6 +82,10 @@ if MIRROR_AVAILABLE:
     NODE_CLASS_MAPPINGS.update(MIRROR_MAPPINGS)
     NODE_DISPLAY_NAME_MAPPINGS.update(MIRROR_DISPLAY_MAPPINGS)
 
+if OPENAI_MIRROR_AVAILABLE:
+    NODE_CLASS_MAPPINGS.update(OPENAI_MIRROR_MAPPINGS)
+    NODE_DISPLAY_NAME_MAPPINGS.update(OPENAI_MIRROR_DISPLAY_MAPPINGS)
+
 # 导出给 ComfyUI
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
@@ -88,5 +101,7 @@ if IMAGE_EDIT_AVAILABLE:
     print("✅ Image edit nodes available")
 if MIRROR_AVAILABLE:
     print("✅ Mirror nodes available")
-if not ORIGINAL_AVAILABLE and not VERTEX_AVAILABLE and not REST_AVAILABLE and not IMAGE_EDIT_AVAILABLE and not MIRROR_AVAILABLE:
+if OPENAI_MIRROR_AVAILABLE:
+    print("✅ OpenAI Mirror nodes available")
+if not ORIGINAL_AVAILABLE and not VERTEX_AVAILABLE and not REST_AVAILABLE and not IMAGE_EDIT_AVAILABLE and not MIRROR_AVAILABLE and not OPENAI_MIRROR_AVAILABLE:
     print("⚠️ No nodes available - check dependencies")
