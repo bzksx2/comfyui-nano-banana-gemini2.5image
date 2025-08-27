@@ -69,7 +69,7 @@ class GeminiImageEdit:
                 "api_key": ("STRING", {"default": "", "multiline": False}),
                 "images": ("IMAGE",),  # 支持批次图像
                 "prompt": ("STRING", {"default": "Describe these images and edit them", "multiline": True}),
-                "model": (["gemini-2.5-flash-image-preview", "gemini-2.0-flash-preview-image-generation"], {"default": "gemini-2.5-flash-image-preview"}),
+                "model": (["gemini-2.5-flash-image-preview", "gemini-2.0-flash-preview-image-generation"], {"default": "gemini-2.0-flash-preview-image-generation"}),
                 "temperature": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),
                 "top_p": ("FLOAT", {"default": 0.95, "min": 0.0, "max": 1.0, "step": 0.05}),
                 "max_output_tokens": ("INT", {"default": 8192, "min": 1, "max": 32768}),
@@ -123,7 +123,7 @@ class GeminiImageEdit:
         # 构建API URL
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         
-        # 构建请求数据
+        # 构建请求数据 - 更新为匹配官方示例的格式
         request_data = {
             "contents": [{
                 "parts": [
@@ -139,8 +139,7 @@ class GeminiImageEdit:
             "generationConfig": {
                 "temperature": temperature,
                 "topP": top_p,
-                "maxOutputTokens": max_output_tokens,
-                "responseModalities": ["TEXT", "IMAGE"]
+                "maxOutputTokens": max_output_tokens
             }
         }
         
@@ -174,14 +173,15 @@ class GeminiImageEdit:
         # 构建API URL
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         
-        # 构建请求数据
+        # 构建请求数据 - 更新为匹配官方示例的格式
         request_data = {
-            "contents": [{"parts": parts}],
+            "contents": [{
+                "parts": parts
+            }],
             "generationConfig": {
                 "temperature": temperature,
                 "topP": top_p,
-                "maxOutputTokens": max_output_tokens,
-                "responseModalities": ["TEXT", "IMAGE"]
+                "maxOutputTokens": max_output_tokens
             }
         }
         
