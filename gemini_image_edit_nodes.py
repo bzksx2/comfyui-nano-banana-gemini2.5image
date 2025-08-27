@@ -67,6 +67,7 @@ class GeminiImageEdit:
         return {
             "required": {
                 "api_key": ("STRING", {"default": "", "multiline": False}),
+                "api_host": ("STRING", {"default": "https://generativelanguage.googleapis.com", "multiline": False}),
                 "images": ("IMAGE",),  # 支持批次图像
                 "prompt": ("STRING", {"default": "Describe these images and edit them", "multiline": True}),
                 "model": (["gemini-2.5-flash-image-preview", "gemini-2.0-flash-preview-image-generation"], {"default": "gemini-2.0-flash-preview-image-generation"}),
@@ -82,7 +83,7 @@ class GeminiImageEdit:
     FUNCTION = "edit_images"
     CATEGORY = "Gemini"
     
-    def edit_images(self, api_key: str, images: torch.Tensor, prompt: str, model: str,
+    def edit_images(self, api_key: str, api_host: str, images: torch.Tensor, prompt: str, model: str,
                    temperature: float, top_p: float, max_output_tokens: int, process_mode: str) -> Tuple[torch.Tensor, str]:
         """批次处理图像编辑"""
         
@@ -103,17 +104,17 @@ class GeminiImageEdit:
         
         if process_mode == "first_image_only":
             # 只处理第一张图像
-            return self._process_single_image(api_key, pil_images[0], prompt, model, temperature, top_p, max_output_tokens)
+            return self._process_single_image(api_key, api_host, pil_images[0], prompt, model, temperature, top_p, max_output_tokens)
         
         elif process_mode == "all_images_combined":
             # 将所有图像合并发送
-            return self._process_combined_images(api_key, pil_images, prompt, model, temperature, top_p, max_output_tokens)
+            return self._process_combined_images(api_key, api_host, pil_images, prompt, model, temperature, top_p, max_output_tokens)
         
         elif process_mode == "each_image_separately":
             # 分别处理每张图像，返回所有结果
-            return self._process_images_separately(api_key, pil_images, prompt, model, temperature, top_p, max_output_tokens)    
+            return self._process_images_separately(api_key, api_host, pil_images, prompt, model, temperature, top_p, max_output_tokens)    
 
-    def _process_single_image(self, api_key: str, pil_image: Image.Image, prompt: str, model: str,
+    def _process_single_image(self, api_key: str, api_host: str, pil_image: Image.Image, prompt: str, model: str,
                              temperature: float, top_p: float, max_output_tokens: int) -> Tuple[torch.Tensor, str]:
         """处理单张图像"""
         
@@ -121,7 +122,7 @@ class GeminiImageEdit:
         image_base64 = image_to_base64(pil_image, format='JPEG')
         
         # 构建API URL
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        url = f"{api_host}/v1beta/models/{model}:generateContent"
         
         # 构建请求数据 - 更新为匹配官方示例的格式
         request_data = {
@@ -152,7 +153,7 @@ class GeminiImageEdit:
         # 发送请求并处理响应
         return self._send_request_and_process(url, headers, request_data, pil_image, model)
     
-    def _process_combined_images(self, api_key: str, pil_images: List[Image.Image], prompt: str, model: str,
+    def _process_combined_images(self, api_key: str, api_host: str, pil_images: List[Image.Image], prompt: str, model: str,
                                 temperature: float, top_p: float, max_output_tokens: int) -> Tuple[torch.Tensor, str]:
         """处理多张图像（合并发送）"""
         
@@ -171,7 +172,7 @@ class GeminiImageEdit:
             print(f"📎 添加第 {i+1} 张图像到请求中")
         
         # 构建API URL
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        url = f"{api_host}/v1beta/models/{model}:generateContent"
         
         # 构建请求数据 - 更新为匹配官方示例的格式
         request_data = {
@@ -194,58 +195,37 @@ class GeminiImageEdit:
         # 发送请求并处理响应
         return self._send_request_and_process(url, headers, request_data, pil_images[0], model)
     
-    def _process_images_separately(self, api_key: str, pil_images: List[Image.Image], prompt: str, model: str,
+    def _process_images_separately(self, api_key: str, api_host: str, pil_images: List[Image.Image], prompt: str, model: str,
                                   temperature: float, top_p: float, max_output_tokens: int) -> Tuple[torch.Tensor, str]:
         """分别处理每张图像"""
         
-        edited_images = []
-        response_texts = []
-        
-        print(f"🔄 开始分别处理 {len(pil_images)} 张图像...")
+        all_edited_images = []
+        all_responses = []
         
         for i, pil_image in enumerate(pil_images):
-            print(f"📸 处理第 {i+1}/{len(pil_images)} 张图像")
+            print(f"🔄 处理第 {i+1}/{len(pil_images)} 张图像")
             
-            try:
-                # 为每张图像添加序号信息到提示词
-                image_prompt = f"{prompt}\n\n[处理第 {i+1} 张图像]"
-                
-                # 处理单张图像
-                edited_tensor, response_text = self._process_single_image(
-                    api_key, pil_image, image_prompt, model, temperature, top_p, max_output_tokens
-                )
-                
-                # 转换回PIL图像并添加到列表
-                edited_pil = tensor_to_pil(edited_tensor)
-                edited_images.append(edited_pil)
-                response_texts.append(f"图像 {i+1}: {response_text}")
-                
-                print(f"✅ 第 {i+1} 张图像处理完成")
-                
-                # 添加延迟避免API限流
-                if i < len(pil_images) - 1:  # 不是最后一张图像
-                    time.sleep(1)
-                    
-            except Exception as e:
-                print(f"❌ 第 {i+1} 张图像处理失败: {e}")
-                # 失败时使用原图像
-                edited_images.append(pil_image)
-                response_texts.append(f"图像 {i+1}: 处理失败 - {str(e)}")
+            # 为每张图像添加序号到提示词中
+            numbered_prompt = f"Image {i+1}/{len(pil_images)}: {prompt}"
+            
+            # 处理单张图像
+            edited_image, response = self._process_single_image(
+                api_key, api_host, pil_image, numbered_prompt, model,
+                temperature, top_p, max_output_tokens
+            )
+            
+            all_edited_images.append(edited_image)
+            all_responses.append(f"Image {i+1}/{len(pil_images)}:\n{response}\n")
         
-        # 将所有编辑后的图像合并为批次tensor
-        if len(edited_images) == 1:
-            # 单张图像
-            final_tensor = pil_to_tensor(edited_images[0])
+        # 合并所有编辑后的图像和响应
+        if len(all_edited_images) > 1:
+            combined_images = torch.cat(all_edited_images, dim=0)
         else:
-            # 多张图像，创建批次tensor
-            tensors = [pil_to_tensor(img) for img in edited_images]
-            final_tensor = torch.stack(tensors, dim=0)
+            combined_images = all_edited_images[0]
         
-        # 合并所有响应文本
-        combined_response = "\n\n".join(response_texts)
+        combined_response = "\n---\n".join(all_responses)
         
-        print(f"✅ 所有图像处理完成，输出张量形状: {final_tensor.shape}")
-        return (final_tensor, combined_response)
+        return combined_images, combined_response
     
     def _send_request_and_process(self, url: str, headers: dict, request_data: dict, 
                                  fallback_image: Image.Image, model: str) -> Tuple[torch.Tensor, str]:
