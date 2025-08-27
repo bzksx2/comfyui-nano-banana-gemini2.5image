@@ -45,20 +45,29 @@ pip install -r requirements.txt
 
 ### Gemini 图片编辑 (GeminiImageEdit)
 
-基于输入图像进行智能编辑。
+基于输入图像进行智能编辑，支持单图和多图批量处理。
 
 **输入参数:**
 - `api_key`: Google Gemini API 密钥
-- `image`: 输入图像 (IMAGE 类型)
+- `images`: 输入图像 (IMAGE 类型，支持批量)
 - `prompt`: 编辑指令
 - `model`: 选择模型
 - `temperature`: 创造性控制
 - `top_p`: 采样控制
 - `max_output_tokens`: 最大输出令牌数
+- `process_mode`: 处理模式
+  - `each_image_separately`: 分别处理每张图片 (默认)
+  - `all_images_combined`: 所有图片合并处理
+  - `first_image_only`: 仅处理第一张图片
 
 **输出:**
 - `edited_image`: 编辑后的图像 (IMAGE 类型)
 - `response_text`: API 响应文本
+
+**处理模式说明:**
+- **each_image_separately**: 对每张图片单独处理，适合个性化编辑
+- **all_images_combined**: 将所有图片一起处理，适合保持风格一致性
+- **first_image_only**: 只处理第一张图片，适合快速测试
 
 ### Gemini 镜像站图片生成 (GeminiMirrorImageGeneration)
 
@@ -95,6 +104,39 @@ pip install -r requirements.txt
 - `edited_image`: 编辑后的图像 (IMAGE 类型)
 - `response_text`: API 响应文本
 
+### 镜像站文生图 (NanoBananaTextToImage)
+
+使用镜像站API进行文本到图像生成，基于 https://ai.comfly.chat 镜像站。
+
+**输入参数:**
+- `api_key`: API 密钥
+- `prompt`: 图像生成提示词
+- `model`: 模型名称 (默认: nano-banana)
+- `response_format`: 响应格式 (url 或 b64_json)
+- `seed`: 随机种子 (-1表示使用随机种子)
+
+**输出:**
+- `image`: 生成的图像 (IMAGE 类型)
+- `info`: API 响应文本
+- `seed`: 使用的随机种子值
+
+### 镜像站图生图 (NanoBananaImageToImage)
+
+使用镜像站API进行图像编辑，支持多图处理。
+
+**输入参数:**
+- `api_key`: API 密钥
+- `images`: 输入图像 (IMAGE 类型)
+- `prompt`: 编辑指令
+- `model`: 模型名称 (默认: nano-banana)
+- `response_format`: 响应格式 (url 或 b64_json)
+- `seed`: 随机种子 (-1表示使用随机种子)
+
+**输出:**
+- `image`: 编辑后的图像 (IMAGE 类型)
+- `info`: API 响应文本
+- `seed`: 使用的随机种子值
+
 ## 🔧 技术特性
 
 ### 智能重试机制
@@ -122,7 +164,12 @@ torch>=1.9.0          # 深度学习框架
 numpy>=1.21.0         # 数值计算
 Pillow>=8.0.0         # 图像处理
 requests>=2.25.0      # HTTP 请求
-google-genai>=0.3.0   # Google AI SDK
+
+# 可选依赖（仅当使用Google API时需要）
+# google-genai>=0.3.0   # Google AI SDK
+# google-cloud-aiplatform>=1.25.0
+# google-auth>=2.0.0
+# google-auth-oauthlib>=0.5.0
 ```
 
 ## 🛠️ 使用示例
@@ -155,15 +202,16 @@ api_key = "your_api_key"
 prompt = "A beautiful sunset over the ocean"
 ```
 
-### 使用 OpenAI 格式镜像站
+### 使用镜像站API
 
 ```python
-# 在 ComfyUI 中添加 "Gemini OpenAI格式镜像站图片生成" 节点
-# 设置 OpenAI 格式API地址:
-api_url = "https://ai.t8star.cn"  # OpenAI 格式镜像站
+# 在 ComfyUI 中添加 "镜像站文生图" 节点
+# 使用镜像站API:
 api_key = "your_api_key"
-model = "gpt-4o-image"  # 支持图像的模型
-prompt = "生成图片: 一个美丽的山景"
+prompt = "一只可爱的猫咪"
+model = "nano-banana"
+response_format = "b64_json"
+seed = 42  # 使用固定种子以获得一致的结果
 ```
 
 ## 🌐 支持的镜像站
@@ -175,45 +223,34 @@ prompt = "生成图片: 一个美丽的山景"
 - `https://api.openai-proxy.com` - 代理服务
 - 其他兼容 Gemini API 格式的镜像服务
 
-### OpenAI 格式镜像站
-- `https://ai.t8star.cn` - T8Star 镜像站
-- `https://api.chatanywhere.com.cn` - ChatAnywhere
-- 其他兼容 OpenAI Chat Completions API 的镜像服务
+### 镜像站API (OpenAI兼容格式)
+- `https://ai.comfly.chat` - 支持OpenAI兼容格式的镜像站
+- 文生图 API: `/v1/images/generations`
+- 图生图 API: `/v1/images/edits`
+- 模型: gemini-2.5-flash-image-preview
 
-### 镜像站配置说明
+### 镜像站API配置说明
 
-1. **完整URL**: 如果提供完整的API端点，插件会直接使用
-   ```
-   https://ai.comfly.chat/v1beta/models/gemini-2.5-flash-image-preview:generateContent
-   ```
+1. **API 地址**: 默认使用 `https://ai.comfly.chat`
+   - 文生图: `https://ai.comfly.chat/v1/images/generations`
+   - 图生图: `https://ai.comfly.chat/v1/images/edits`
 
-2. **基础URL**: 如果只提供基础域名，插件会自动构建完整路径
-   ```
-   https://ai.comfly.chat
-   ```
+2. **模型选择**: 使用 `nano-banana` 模型
+   - 基于 Gemini 2.5 Flash Image Preview
+   - 支持中文和英文提示词
+   - 优化的图像生成和编辑能力
 
-3. **URL验证**: 插件会自动验证URL格式的有效性
+3. **响应格式**: 
+   - `b64_json`: 返回 base64 编码的图片数据 (推荐)
+   - `url`: 返回图片 URL 链接
 
-### OpenAI 格式配置说明
-
-1. **完整URL**: 如果提供完整的API端点，插件会直接使用
-   ```
-   https://ai.t8star.cn/v1/chat/completions
-   ```
-
-2. **基础URL**: 如果只提供基础域名，插件会自动构建完整路径
-   ```
-   https://ai.t8star.cn
-   ```
-
-3. **模型选择**: 使用支持图像功能的模型名称
-   - `gpt-4o-image` - 支持图像生成和编辑
-   - `gpt-4-vision-preview` - 支持图像理解和编辑
-   - 其他镜像站特定的图像模型
+4. **随机种子**:
+   - `-1`: 使用随机种子 (每次生成不同结果)
+   - 特定值: 使用固定种子 (可重现相同结果)
 
 ## ⚠️ 注意事项
 
-1. **API 配额**: 注意 Google Gemini API 的使用限制
+1. **API 配额**: 注意 API 的使用限制
 2. **网络连接**: 确保稳定的网络连接
 3. **图像大小**: 大图像可能需要更长处理时间
 4. **模型选择**: 不同模型有不同的特性和限制
@@ -237,7 +274,7 @@ prompt = "生成图片: 一个美丽的山景"
 
 ## 📄 许可证
 
-本项目遵循开源许可证。使用前请确保遵守 Google Gemini API 的使用条款。
+本项目遵循开源许可证。使用前请确保遵守相关API的使用条款。
 
 ## 🤝 贡献
 
@@ -245,4 +282,4 @@ prompt = "生成图片: 一个美丽的山景"
 
 ---
 
-**注意**: 使用本插件需要有效的 Google Gemini API 密钥。请确保遵守相关的使用条款和限制。
+**注意**: 使用本插件需要有效的API密钥。请确保遵守相关的使用条款和限制。

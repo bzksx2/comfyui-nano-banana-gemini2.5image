@@ -40,23 +40,20 @@ except ImportError as e:
     IMAGE_EDIT_DISPLAY_MAPPINGS = {}
     IMAGE_EDIT_AVAILABLE = False
 
-try:
-    from .gemini_mirror_nodes import NODE_CLASS_MAPPINGS as MIRROR_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as MIRROR_DISPLAY_MAPPINGS
-    MIRROR_AVAILABLE = True
-except ImportError as e:
-    print(f"Mirror nodes not available: {e}")
-    MIRROR_MAPPINGS = {}
-    MIRROR_DISPLAY_MAPPINGS = {}
-    MIRROR_AVAILABLE = False
+# 移除对镜像站节点的引用
+MIRROR_AVAILABLE = False
+MIRROR_MAPPINGS = {}
+MIRROR_DISPLAY_MAPPINGS = {}
 
+# 添加对Nano-banana节点的引用
 try:
-    from .gemini_openai_mirror_nodes import NODE_CLASS_MAPPINGS as OPENAI_MIRROR_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as OPENAI_MIRROR_DISPLAY_MAPPINGS
-    OPENAI_MIRROR_AVAILABLE = True
+    from .nano_banana_nodes import NODE_CLASS_MAPPINGS as NANO_BANANA_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as NANO_BANANA_DISPLAY_MAPPINGS
+    NANO_BANANA_AVAILABLE = True
 except ImportError as e:
-    print(f"OpenAI Mirror nodes not available: {e}")
-    OPENAI_MIRROR_MAPPINGS = {}
-    OPENAI_MIRROR_DISPLAY_MAPPINGS = {}
-    OPENAI_MIRROR_AVAILABLE = False
+    print(f"Nano-banana nodes not available: {e}")
+    NANO_BANANA_MAPPINGS = {}
+    NANO_BANANA_DISPLAY_MAPPINGS = {}
+    NANO_BANANA_AVAILABLE = False
 
 # 批次节点已合并到图像编辑节点中
 
@@ -80,13 +77,9 @@ if IMAGE_EDIT_AVAILABLE:
     NODE_CLASS_MAPPINGS.update(IMAGE_EDIT_MAPPINGS)
     NODE_DISPLAY_NAME_MAPPINGS.update(IMAGE_EDIT_DISPLAY_MAPPINGS)
 
-if MIRROR_AVAILABLE:
-    NODE_CLASS_MAPPINGS.update(MIRROR_MAPPINGS)
-    NODE_DISPLAY_NAME_MAPPINGS.update(MIRROR_DISPLAY_MAPPINGS)
-
-if OPENAI_MIRROR_AVAILABLE:
-    NODE_CLASS_MAPPINGS.update(OPENAI_MIRROR_MAPPINGS)
-    NODE_DISPLAY_NAME_MAPPINGS.update(OPENAI_MIRROR_DISPLAY_MAPPINGS)
+if NANO_BANANA_AVAILABLE:
+    NODE_CLASS_MAPPINGS.update(NANO_BANANA_MAPPINGS)
+    NODE_DISPLAY_NAME_MAPPINGS.update(NANO_BANANA_DISPLAY_MAPPINGS)
 
 # 批次处理功能已集成到图像编辑节点中
 
@@ -103,9 +96,7 @@ if REST_AVAILABLE:
     print("✅ REST API nodes available")
 if IMAGE_EDIT_AVAILABLE:
     print("✅ Image edit nodes available")
-if MIRROR_AVAILABLE:
-    print("✅ Mirror nodes available")
-if OPENAI_MIRROR_AVAILABLE:
-    print("✅ OpenAI Mirror nodes available")
-if not ORIGINAL_AVAILABLE and not VERTEX_AVAILABLE and not REST_AVAILABLE and not IMAGE_EDIT_AVAILABLE and not MIRROR_AVAILABLE and not OPENAI_MIRROR_AVAILABLE:
+if NANO_BANANA_AVAILABLE:
+    print("✅ Nano-banana nodes available")
+if not ORIGINAL_AVAILABLE and not VERTEX_AVAILABLE and not REST_AVAILABLE and not IMAGE_EDIT_AVAILABLE and not NANO_BANANA_AVAILABLE:
     print("⚠️ No nodes available - check dependencies")
