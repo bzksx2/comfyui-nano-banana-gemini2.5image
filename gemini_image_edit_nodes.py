@@ -122,7 +122,7 @@ class GeminiImageEdit:
         image_base64 = image_to_base64(pil_image, format='JPEG')
         
         # 构建API URL
-        url = f"{api_host}/v1beta/models/{model}:generateContent"
+        url = f"{api_host}"
         
         # 构建请求数据 - 更新为匹配官方示例的格式
         request_data = {
@@ -172,7 +172,7 @@ class GeminiImageEdit:
             print(f"📎 添加第 {i+1} 张图像到请求中")
         
         # 构建API URL
-        url = f"{api_host}/v1beta/models/{model}:generateContent"
+        url = f"{api_host}"
         
         # 构建请求数据 - 更新为匹配官方示例的格式
         request_data = {
