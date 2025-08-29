@@ -36,7 +36,7 @@ try:
     from .gemini_image_edit_nodes import NODE_CLASS_MAPPINGS as IMAGE_EDIT_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as IMAGE_EDIT_DISPLAY_MAPPINGS
     IMAGE_EDIT_AVAILABLE = True
 
-    logger.error(f"Image edit nodes available: {e}")
+    logger.error("Image edit nodes available")
 except ImportError as e:
     logger.error(f"Image edit nodes not available: {e}")
     IMAGE_EDIT_MAPPINGS = {}
@@ -46,7 +46,7 @@ except ImportError as e:
 try:
     from .openrouter_image_edit import NODE_CLASS_MAPPINGS as OPENROUTER_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as OPENROUTER_DISPLAY_MAPPINGS
     OPENROUTER_AVAILABLE = True
-    logger.error(f"OpenRouter nodes available: {e}")
+    logger.error("OpenRouter nodes available")
 except ImportError as e:
     logger.error(f"OpenRouter nodes not available: {e}")
     OPENROUTER_MAPPINGS = {}
