@@ -4,6 +4,10 @@ ComfyUI Gemini Plugin
 """
 import logging
 
+# 设置日志
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 # Try to import existing nodes if available
 try:
     from .nodes_fixed import NODE_CLASS_MAPPINGS as ORIGINAL_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as ORIGINAL_DISPLAY_MAPPINGS
@@ -103,8 +107,8 @@ if OPENROUTER_AVAILABLE:
 # 导出给 ComfyUI
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
-print("🚀 Gemini ComfyUI Plugin loaded successfully!")
-print(f"📦 Loaded {len(NODE_CLASS_MAPPINGS)} nodes")
+logger.info("🚀 Gemini ComfyUI Plugin loaded successfully!")
+logger.error(f"📦 Loaded {len(NODE_CLASS_MAPPINGS)} nodes")
 if ORIGINAL_AVAILABLE:
     print("✅ Original API nodes available")
 if VERTEX_AVAILABLE:
@@ -112,7 +116,7 @@ if VERTEX_AVAILABLE:
 if REST_AVAILABLE:
     print("✅ REST API nodes available")
 if IMAGE_EDIT_AVAILABLE:
-    print("✅ Image edit nodes available")
+    logger.error("✅ Image edit nodes available")
 if NANO_BANANA_AVAILABLE:
     print("✅ Nano-banana nodes available")
 if OPENROUTER_AVAILABLE:
