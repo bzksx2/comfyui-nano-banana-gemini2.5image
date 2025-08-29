@@ -12,6 +12,7 @@ import random
 from typing import Optional, Tuple, Dict, Any, List
 from openai import OpenAI
 
+
 try:
     from .tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
     from .utils import (
@@ -20,7 +21,7 @@ try:
     )
     from .config import DEFAULT_CONFIG
 except ImportError:
-    from tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
+    from .tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
     # Fallback utility functions - 如果无法导入，使用内置版本
     pass
     
