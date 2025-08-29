@@ -68,7 +68,6 @@ class OpenRouterImageEdit:
                 "base_url": ("STRING", {"default": "https://openrouter.ai/api/v1", "multiline": False}),
                 "site_url": ("STRING", {"default": "https://your-site.com", "multiline": False}),
                 "site_name": ("STRING", {"default": "Your Site Name", "multiline": False}),
-                "images": ("IMAGE",),  # 支持批次图像
                 "prompt": ("STRING", {"default": "Describe these images and edit them", "multiline": True}),
                 "model": ([
                     "google/gemini-2.5-flash-image-preview:free",
@@ -82,6 +81,10 @@ class OpenRouterImageEdit:
                     "all_images_combined",
                     "each_image_separately"
                 ], {"default": "each_image_separately"}),
+            },
+            "optional": {
+                "images": ("IMAGE",),  # 支持批次图像
+                "image_urls": ("STRING", {"default": "", "multiline": True}),
             }
         }
     
@@ -90,9 +93,10 @@ class OpenRouterImageEdit:
     FUNCTION = "edit_images"
     CATEGORY = "OpenRouter"
     
-    def edit_images(self, api_key: str, base_url: str, site_url: str, site_name: str, images: torch.Tensor,
+    def edit_images(self, api_key: str, base_url: str, site_url: str, site_name: str,
                     prompt: str, model: str, temperature: float, top_p: float,
-                    max_tokens: int, process_mode: str) -> Tuple[torch.Tensor, str]:
+                    max_tokens: int, process_mode: str, images: Optional[torch.Tensor] = None,
+                    image_urls: str = "") -> Tuple[torch.Tensor, str]:
         """批次处理图像编辑"""
         
         # 验证API密钥
@@ -103,42 +107,65 @@ class OpenRouterImageEdit:
         if not prompt.strip():
             raise ValueError("提示词不能为空")
         
-        print(f"📊 输入张量信息: {get_tensor_info(images)}")
-        print(f"🔧 处理模式: {process_mode}")
+        # 验证输入：至少需要一个图像来源
+        if images is None and not image_urls.strip():
+            raise ValueError("必须提供至少一个图像来源：images 或 image_urls")
         
-        # 转换为PIL图像列表
-        pil_images = batch_tensor_to_pil_list(images)
-        print(f"🖼️ 转换得到 {len(pil_images)} 张图像")
+        # 如果提供了图像张量，转换为PIL图像列表
+        pil_images = []
+        if images is not None:
+            print(f"📊 输入张量信息: {get_tensor_info(images)}")
+            pil_images = batch_tensor_to_pil_list(images)
+            print(f"🖼️ 转换得到 {len(pil_images)} 张图像")
+        
+        # 解析image_urls
+        url_list = [url.strip() for url in image_urls.split('\n') if url.strip()] if image_urls else []
+        if url_list:
+            print(f"🔗 提供了 {len(url_list)} 个图像URL")
+        
+        # 如果只有URL，创建一个空的PIL图像作为占位符
+        if not pil_images and url_list:
+            pil_images = [Image.new('RGB', (1, 1), (0, 0, 0)) for _ in url_list]
+        
+        print(f"🔧 处理模式: {process_mode}")
         
         if process_mode == "first_image_only":
             # 只处理第一张图像
             return self._process_single_image(
                 api_key, base_url, site_url, site_name, pil_images[0],
-                prompt, model, temperature, top_p, max_tokens
+                prompt, model, temperature, top_p, max_tokens,
+                url_list[0] if url_list else ""
             )
         
         elif process_mode == "all_images_combined":
             # 将所有图像合并发送
             return self._process_combined_images(
                 api_key, base_url, site_url, site_name, pil_images,
-                prompt, model, temperature, top_p, max_tokens
+                prompt, model, temperature, top_p, max_tokens,
+                image_urls
             )
         
         elif process_mode == "each_image_separately":
             # 分别处理每张图像，返回所有结果
             return self._process_images_separately(
                 api_key, base_url, site_url, site_name, pil_images,
-                prompt, model, temperature, top_p, max_tokens
+                prompt, model, temperature, top_p, max_tokens,
+                image_urls
             )
 
     def _process_single_image(self, api_key: str, base_url: str, site_url: str, site_name: str,
                              pil_image: Image.Image, prompt: str, model: str,
                              temperature: float, top_p: float,
-                             max_tokens: int) -> Tuple[torch.Tensor, str]:
+                             max_tokens: int, image_url: str = "") -> Tuple[torch.Tensor, str]:
         """处理单张图像"""
         
-        # 转换为base64
-        image_base64 = image_to_base64(pil_image, format='JPEG')
+        # 根据是否提供URL决定使用base64还是直接URL
+        if image_url and image_url.strip():
+            image_data = {"url": image_url.strip()}
+        else:
+            # 转换为base64
+            image_base64 = image_to_base64(pil_image, format='JPEG')
+            image_data = {"url": f"data:image/jpeg;base64,{image_base64}"}
         
         # 初始化OpenAI客户端
         client = OpenAI(
@@ -164,9 +191,7 @@ class OpenRouterImageEdit:
                             },
                             {
                                 "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_base64}"
-                                }
+                                "image_url": image_data
                             }
                         ]
                     }
@@ -193,7 +218,7 @@ class OpenRouterImageEdit:
     def _process_combined_images(self, api_key: str, base_url: str, site_url: str, site_name: str,
                                 pil_images: List[Image.Image], prompt: str, model: str,
                                 temperature: float, top_p: float,
-                                max_tokens: int) -> Tuple[torch.Tensor, str]:
+                                max_tokens: int, image_urls: str = "") -> Tuple[torch.Tensor, str]:
         """处理多张图像（合并发送）"""
         
         # 初始化OpenAI客户端
@@ -211,14 +236,22 @@ class OpenRouterImageEdit:
                 }
             ]
             
+            # 解析image_urls（如果提供）
+            url_list = [url.strip() for url in image_urls.split('\n') if url.strip()] if image_urls else []
+            
             # 添加所有图像
             for i, pil_image in enumerate(pil_images):
-                image_base64 = image_to_base64(pil_image, format='JPEG')
+                if i < len(url_list):
+                    # 使用提供的URL
+                    image_data = {"url": url_list[i]}
+                else:
+                    # 使用base64
+                    image_base64 = image_to_base64(pil_image, format='JPEG')
+                    image_data = {"url": f"data:image/jpeg;base64,{image_base64}"}
+                
                 content.append({
                     "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{image_base64}"
-                    }
+                    "image_url": image_data
                 })
                 print(f"📎 添加第 {i+1} 张图像到请求中")
             
@@ -255,11 +288,14 @@ class OpenRouterImageEdit:
     def _process_images_separately(self, api_key: str, base_url: str, site_url: str, site_name: str,
                                   pil_images: List[Image.Image], prompt: str, model: str,
                                   temperature: float, top_p: float,
-                                  max_tokens: int) -> Tuple[torch.Tensor, str]:
+                                  max_tokens: int, image_urls: str = "") -> Tuple[torch.Tensor, str]:
         """分别处理每张图像"""
         
         all_edited_images = []
         all_responses = []
+        
+        # 解析image_urls（如果提供）
+        url_list = [url.strip() for url in image_urls.split('\n') if url.strip()] if image_urls else []
         
         for i, pil_image in enumerate(pil_images):
             print(f"🔄 处理第 {i+1}/{len(pil_images)} 张图像")
@@ -268,9 +304,10 @@ class OpenRouterImageEdit:
             numbered_prompt = f"Image {i+1}/{len(pil_images)}: {prompt}"
             
             # 处理单张图像
+            image_url = url_list[i] if i < len(url_list) else ""
             edited_image, response = self._process_single_image(
                 api_key, base_url, site_url, site_name, pil_image, numbered_prompt,
-                model, temperature, top_p, max_tokens
+                model, temperature, top_p, max_tokens, image_url
             )
             
             all_edited_images.append(edited_image)
