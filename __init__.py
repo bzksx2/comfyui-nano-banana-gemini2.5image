@@ -2,6 +2,7 @@
 ComfyUI Gemini Plugin
 支持 Google Gemini API 和 Vertex AI 的图像生成节点
 """
+import logging
 
 # Try to import existing nodes if available
 try:
@@ -34,8 +35,10 @@ except ImportError as e:
 try:
     from .gemini_image_edit_nodes import NODE_CLASS_MAPPINGS as IMAGE_EDIT_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as IMAGE_EDIT_DISPLAY_MAPPINGS
     IMAGE_EDIT_AVAILABLE = True
+
+    logger.error(f"Image edit nodes available: {e}")
 except ImportError as e:
-    print(f"Image edit nodes not available: {e}")
+    logger.error(f"Image edit nodes not available: {e}")
     IMAGE_EDIT_MAPPINGS = {}
     IMAGE_EDIT_DISPLAY_MAPPINGS = {}
     IMAGE_EDIT_AVAILABLE = False
@@ -43,8 +46,9 @@ except ImportError as e:
 try:
     from .openrouter_image_edit import NODE_CLASS_MAPPINGS as OPENROUTER_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS as OPENROUTER_DISPLAY_MAPPINGS
     OPENROUTER_AVAILABLE = True
+    logger.error(f"OpenRouter nodes available: {e}")
 except ImportError as e:
-    print(f"OpenRouter nodes not available: {e}")
+    logger.error(f"OpenRouter nodes not available: {e}")
     OPENROUTER_MAPPINGS = {}
     OPENROUTER_DISPLAY_MAPPINGS = {}
     OPENROUTER_AVAILABLE = False
@@ -112,6 +116,6 @@ if IMAGE_EDIT_AVAILABLE:
 if NANO_BANANA_AVAILABLE:
     print("✅ Nano-banana nodes available")
 if OPENROUTER_AVAILABLE:
-    print("✅ OpenRouter nodes available")
+    logger.error("✅ OpenRouter nodes available")
 if not ORIGINAL_AVAILABLE and not VERTEX_AVAILABLE and not REST_AVAILABLE and not IMAGE_EDIT_AVAILABLE and not NANO_BANANA_AVAILABLE and not OPENROUTER_AVAILABLE:
     print("⚠️ No nodes available - check dependencies")
