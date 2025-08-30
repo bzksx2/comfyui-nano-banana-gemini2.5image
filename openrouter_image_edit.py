@@ -11,7 +11,11 @@ import time
 import random
 from typing import Optional, Tuple, Dict, Any, List
 from openai import OpenAI
+import logging
 
+# 设置日志
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 try:
     from .tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
@@ -21,6 +25,7 @@ try:
     )
     from .config import DEFAULT_CONFIG
 except ImportError:
+    logger.erorr("load tensor utils error")
     from .tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
     # Fallback utility functions - 如果无法导入，使用内置版本
     pass
