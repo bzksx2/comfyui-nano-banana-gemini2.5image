@@ -306,7 +306,7 @@ class OpenRouterImageEdit:
                 image_tensor = pil_to_tensor(edited_image)
                 
                 print("✅ 图片处理完成")
-                return (image_tensor)
+                return (image_tensor, "")
             
         except Exception as e:
             error_msg = format_error_message(e)
