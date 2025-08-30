@@ -294,11 +294,12 @@ class OpenRouterImageEdit:
                     max_tokens=max_tokens
                 )
                 
-                choice = completion["choices"][0]
-                message = choice["message"]
+                # OpenAI SDK 的 ChatCompletionMessage 对象
+                message = completion.choices[0].message
 
-                if "images" in message and message["images"]:
-                    image_url = message["images"][0]["image_url"]["url"]
+                if hasattr(message, 'images') and message.images:
+                    # 被反序列化成了 list[dict]，而不是带属性的对象，改成按字典取值
+                    image_url = message.images[0]['image_url']['url']
                     if image_url.startswith("data:image"):
                         base64_str = image_url.split(",", 1)[1]
                         image_bytes = base64.b64decode(base64_str)
@@ -310,7 +311,6 @@ class OpenRouterImageEdit:
                     raise ValueError("响应中未找到图像数据")
 
                 image_tensor = pil_to_tensor(edited_image)
-                
                 print("✅ 图片处理完成")
                 return (image_tensor, "")
             
