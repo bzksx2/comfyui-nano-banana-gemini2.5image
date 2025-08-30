@@ -208,10 +208,12 @@ class OpenRouterImageEdit:
                 top_p=top_p
             )
 
+            # OpenAI SDK 的 ChatCompletionMessage 对象
             message = completion.choices[0].message
 
             if hasattr(message, 'images') and message.images:
-                image_url = message.images[0].image_url.url
+                # 被反序列化成了 list[dict]，而不是带属性的对象，改成按字典取值
+                image_url = message.images[0]['image_url']['url']
                 if image_url.startswith("data:image"):
                     base64_str = image_url.split(",", 1)[1]
                     image_bytes = base64.b64decode(base64_str)
@@ -227,6 +229,12 @@ class OpenRouterImageEdit:
             return (image_tensor, '')
             
         except Exception as e:
+            # 把 message 的原始内容用 error 级别打印
+            try:
+                logger.error("message 原始内容: %s", message, exc_info=False)
+            except Exception:
+                logger.error("message 未定义或无法打印", exc_info=True)
+
             error_msg = format_error_message(e)
             print(f"❌ 处理失败: {error_msg}")
             raise ValueError(f"图片处理失败: {error_msg}")
