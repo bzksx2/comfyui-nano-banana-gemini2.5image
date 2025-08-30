@@ -18,15 +18,15 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 try:
-    from .tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
-    from .utils import (
+    from tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
+    from utils import (
         image_to_base64, base64_to_image,
         validate_api_key, format_error_message, resize_image_for_api
     )
-    from .config import DEFAULT_CONFIG
+    from config import DEFAULT_CONFIG
 except ImportError:
     logger.erorr("load tensor utils error")
-    from .tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
+    from tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
     # Fallback utility functions - 如果无法导入，使用内置版本
     pass
     
