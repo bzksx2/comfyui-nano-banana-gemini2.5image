@@ -89,6 +89,7 @@ class OpenRouterImageEdit:
                     "all_images_combined",
                     "each_image_separately"
                 ], {"default": "each_image_separately"}),
+                "amount": ("INT", {"default": 1, "min": 1, "max": 10, "step": 1}),
             },
             "optional": {
                 "images": ("IMAGE",),  # 支持批次图像
@@ -103,7 +104,7 @@ class OpenRouterImageEdit:
     
     def edit_images(self, api_key: str, base_url: str, site_url: str, site_name: str,
                     prompt: str, model: str, temperature: float, top_p: float,
-                    max_tokens: int, process_mode: str, images: Optional[torch.Tensor] = None,
+                    max_tokens: int, process_mode: str, amount: int,images: Optional[torch.Tensor] = None,
                     image_urls: str = "") -> Tuple[torch.Tensor, str]:
         """批次处理图像编辑"""
         
@@ -158,7 +159,7 @@ class OpenRouterImageEdit:
             return self._process_images_separately(
                 api_key, base_url, site_url, site_name, pil_images,
                 prompt, model, temperature, top_p, max_tokens,
-                image_urls
+                image_urls, amount
             )
 
     def _process_single_image(self, api_key: str, base_url: str, site_url: str, site_name: str,
@@ -322,7 +323,7 @@ class OpenRouterImageEdit:
     def _process_images_separately(self, api_key: str, base_url: str, site_url: str, site_name: str,
                                   pil_images: List[Image.Image], prompt: str, model: str,
                                   temperature: float, top_p: float,
-                                  max_tokens: int, image_urls: str = "") -> Tuple[torch.Tensor, str]:
+                                  max_tokens: int, image_urls: str = "", amount: int = 1) -> Tuple[torch.Tensor, str]:
         """分别处理每张图像"""
         
         all_edited_images = []
@@ -334,19 +335,19 @@ class OpenRouterImageEdit:
         for i, pil_image in enumerate(pil_images):
             logger.info(f"🔄 处理第 {i+1}/{len(pil_images)} 张图像")
             
-            # 为每张图像添加序号到提示词中
-            numbered_prompt = f"Image {i+1}/{len(pil_images)}: {prompt}"
             
             # 处理单张图像
             image_url = url_list[i] if i < len(url_list) else ""
-            edited_image, response = self._process_single_image(
-                api_key, base_url, site_url, site_name, pil_image, numbered_prompt,
-                model, temperature, top_p, max_tokens, image_url
-            )
-            
-            all_edited_images.append(edited_image)
-            all_responses.append(f"Image {i+1}/{len(pil_images)}:\n{response}\n")
-        
+
+            for j in range(amount):
+                logger.info(f"🔄 处理第 {i+1}/{len(pil_images)} 张图像的第 {j+1}/{amount} 个变体")
+                edited_image, response = self._process_single_image(
+                    api_key, base_url, site_url, site_name, pil_image, prompt,
+                    model, temperature, top_p, max_tokens, image_url
+                )
+                all_edited_images.append(edited_image)
+                all_responses.append(f"Image {i+1}-{j+1}/{len(pil_images)}:\n{response}\n")
+
         # 合并所有编辑后的图像和响应
         if len(all_edited_images) > 1:
             combined_images = torch.cat(all_edited_images, dim=0)
