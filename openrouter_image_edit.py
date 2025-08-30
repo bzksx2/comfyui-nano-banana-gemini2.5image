@@ -12,6 +12,8 @@ import random
 from typing import Optional, Tuple, Dict, Any, List
 from openai import OpenAI
 import logging
+import os, sys
+sys.path.insert(0, os.path.dirname(__file__))
 
 # 设置日志
 logging.basicConfig(level=logging.DEBUG)
