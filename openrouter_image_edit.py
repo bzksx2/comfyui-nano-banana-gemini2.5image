@@ -206,14 +206,12 @@ class OpenRouterImageEdit:
                 ],
                 temperature=temperature,
                 top_p=top_p
-                # max_tokens=max_tokens
             )
 
-            choice = completion["choices"][0]
-            message = choice["message"]
+            message = completion.choices[0].message
 
-            if "images" in message and message["images"]:
-                image_url = message["images"][0]["image_url"]["url"]
+            if hasattr(message, 'images') and message.images:
+                image_url = message.images[0].image_url.url
                 if image_url.startswith("data:image"):
                     base64_str = image_url.split(",", 1)[1]
                     image_bytes = base64.b64decode(base64_str)
