@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 try:
     from tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
-    from utils import (
+    from .utils import (
         image_to_base64, base64_to_image,
         validate_api_key, format_error_message, resize_image_for_api
     )
-    from config import DEFAULT_CONFIG
+    from .config import DEFAULT_CONFIG
 except ImportError:
-    logger.erorr("load tensor utils error")
+    logger.error("load tensor utils error")
     from tensor_utils import tensor_to_pil, pil_to_tensor, batch_tensor_to_pil_list, get_tensor_info
     # Fallback utility functions - 如果无法导入，使用内置版本
     pass
@@ -96,15 +96,15 @@ class OpenRouterImageEdit:
             }
         }
     
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("edited_image", "response_text")
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("edited_image",)
     FUNCTION = "edit_images"
     CATEGORY = "OpenRouter"
     
     def edit_images(self, api_key: str, base_url: str, site_url: str, site_name: str,
                     prompt: str, model: str, temperature: float, top_p: float,
                     max_tokens: int, process_mode: str, images: Optional[torch.Tensor] = None,
-                    image_urls: str = "") -> Tuple[torch.Tensor, str]:
+                    image_urls: str = "") -> torch.Tensor:
         """批次处理图像编辑"""
         
         # 验证API密钥
@@ -143,7 +143,7 @@ class OpenRouterImageEdit:
                 api_key, base_url, site_url, site_name, pil_images[0],
                 prompt, model, temperature, top_p, max_tokens,
                 url_list[0] if url_list else ""
-            )
+            )[0]
         
         elif process_mode == "all_images_combined":
             # 将所有图像合并发送
@@ -151,7 +151,7 @@ class OpenRouterImageEdit:
                 api_key, base_url, site_url, site_name, pil_images,
                 prompt, model, temperature, top_p, max_tokens,
                 image_urls
-            )
+            )[0]
         
         elif process_mode == "each_image_separately":
             # 分别处理每张图像，返回所有结果
@@ -159,7 +159,7 @@ class OpenRouterImageEdit:
                 api_key, base_url, site_url, site_name, pil_images,
                 prompt, model, temperature, top_p, max_tokens,
                 image_urls
-            )
+            )[0]
 
     def _process_single_image(self, api_key: str, base_url: str, site_url: str, site_name: str,
                              pil_image: Image.Image, prompt: str, model: str,
@@ -205,18 +205,28 @@ class OpenRouterImageEdit:
                     }
                 ],
                 temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_tokens
+                top_p=top_p
+                # max_tokens=max_tokens
             )
-            
-            # 提取响应文本
-            response_text = completion.choices[0].message.content
-            
-            # 由于OpenRouter目前不支持图像编辑，返回原图
-            image_tensor = pil_to_tensor(pil_image)
-            
+
+            choice = completion["choices"][0]
+            message = choice["message"]
+
+            if "images" in message and message["images"]:
+                image_url = message["images"][0]["image_url"]["url"]
+                if image_url.startswith("data:image"):
+                    base64_str = image_url.split(",", 1)[1]
+                    image_bytes = base64.b64decode(base64_str)
+                    edited_image = Image.open(io.BytesIO(image_bytes))
+                    print("✅ 成功提取编辑后的图片")
+                else:
+                    raise ValueError("返回的不是 base64 图像数据")
+            else:
+                raise ValueError("响应中未找到图像数据")
+
+            image_tensor = pil_to_tensor(edited_image)
             print("✅ 图片处理完成")
-            return (image_tensor, response_text)
+            return (image_tensor, '')
             
         except Exception as e:
             error_msg = format_error_message(e)
@@ -234,7 +244,6 @@ class OpenRouterImageEdit:
             base_url=base_url,
             api_key=api_key.strip()
         )
-        
         try:
             # 构建消息内容
             content = [
@@ -263,30 +272,41 @@ class OpenRouterImageEdit:
                 })
                 print(f"📎 添加第 {i+1} 张图像到请求中")
             
-            # 创建聊天完成请求
-            completion = client.chat.completions.create(
-                extra_headers={
-                    "HTTP-Referer": site_url,
-                    "X-Title": site_name,
-                },
-                model=model,
-                messages=[{
-                    "role": "user",
-                    "content": content
-                }],
-                temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_tokens
-            )
-            
-            # 提取响应文本
-            response_text = completion.choices[0].message.content
-            
-            # 由于OpenRouter目前不支持图像编辑，返回第一张图
-            image_tensor = pil_to_tensor(pil_images[0])
-            
-            print("✅ 图片处理完成")
-            return (image_tensor, response_text)
+                # 创建聊天完成请求
+                completion = client.chat.completions.create(
+                    extra_headers={
+                        "HTTP-Referer": site_url,
+                        "X-Title": site_name,
+                    },
+                    model=model,
+                    messages=[{
+                        "role": "user",
+                        "content": content
+                    }],
+                    temperature=temperature,
+                    top_p=top_p,
+                    max_tokens=max_tokens
+                )
+                
+                choice = completion["choices"][0]
+                message = choice["message"]
+
+                if "images" in message and message["images"]:
+                    image_url = message["images"][0]["image_url"]["url"]
+                    if image_url.startswith("data:image"):
+                        base64_str = image_url.split(",", 1)[1]
+                        image_bytes = base64.b64decode(base64_str)
+                        edited_image = Image.open(io.BytesIO(image_bytes))
+                        print("✅ 成功提取编辑后的图片")
+                    else:
+                        raise ValueError("返回的不是 base64 图像数据")
+                else:
+                    raise ValueError("响应中未找到图像数据")
+
+                image_tensor = pil_to_tensor(edited_image)
+                
+                print("✅ 图片处理完成")
+                return (image_tensor)
             
         except Exception as e:
             error_msg = format_error_message(e)
@@ -329,7 +349,7 @@ class OpenRouterImageEdit:
         
         combined_response = "\n---\n".join(all_responses)
         
-        return combined_images, combined_response
+        return combined_images
 
 
 # 节点映射

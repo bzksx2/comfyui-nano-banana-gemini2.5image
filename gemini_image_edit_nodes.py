@@ -321,5 +321,5 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "GeminiImageEdit": "Gemini 图像编辑1",
+    "GeminiImageEdit": "Gemini 图像编辑",
 }
